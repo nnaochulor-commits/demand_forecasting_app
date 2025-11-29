@@ -2,7 +2,7 @@ import io
 import pandas as pd
 import streamlit as st
 from prophet import Prophet
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 MIN_HISTORY_DAYS = 60
 FORECAST_DAYS = 30
