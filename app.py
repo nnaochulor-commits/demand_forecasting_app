@@ -171,17 +171,7 @@ if uploaded_file:
 
             st.dataframe(df_results, use_container_width=True)
 
-            # Optional: allow download of this as an Excel report
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-                df_results.to_excel(writer, index=False, sheet_name="Forecast & Reorder")
-
-            st.download_button(
-                label="📥 Download Forecast & Reorder Report (Excel)",
-                data=buffer.getvalue(),
-                file_name="smartinventory_forecast_reorder.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            
         else:
             st.info("No forecast results were generated. Check that you have enough history per product.")
 
