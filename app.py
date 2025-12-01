@@ -3,6 +3,8 @@ import pandas as pd
 import streamlit as st
 from prophet import Prophet
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 MIN_HISTORY_DAYS = 60
 FORECAST_DAYS = 30
@@ -108,6 +110,7 @@ st.info("💡 Tip: Export past sales from your POS or Excel. You only need Date,
 
 if uploaded_file:
     df = load_and_clean_data(uploaded_file)
+
     st.success(f"Data successfully loaded! {df['product_name'].nunique()} products detected.")
     st.write(f"📆 Date range: {df['ds'].min().date()} → {df['ds'].max().date()}")
     st.write(f"🧾 Total records: {len(df):,}")
@@ -116,6 +119,74 @@ if uploaded_file:
     if df is not None:
         st.write("Data Preview:")
         st.dataframe(df.head())
+
+        st.write("### 📦 Full Product Demand Forecast (Next 14 Days)")
+
+        full_forecast_results = []
+
+        for product in df['product_name'].unique():
+            product_df = df[df['product_name'] == product][['ds', 'y']].copy()
+            
+            try:
+                model = Prophet(yearly_seasonality=True, weekly_seasonality=True)
+                model.fit(product_df)
+                future = model.make_future_dataframe(periods=14)
+                forecast = model.predict(future)
+                
+                total_forecast = forecast.tail(14)['yhat'].sum()
+                full_forecast_results.append([product, round(total_forecast, 1)])
+            except:
+                continue
+
+        df_results = pd.DataFrame(full_forecast_results, columns=['Product', 'Predicted Demand Next 14 Days'])
+        st.dataframe(df_results, use_container_width=True)
+
+        # 🔁 Reorder recommendation section
+        st.write("### 🔁 Reorder Recommendations (Next 14 Days)")
+
+        if not df_results.empty:
+            # Simple approach: one assumed current stock level for all products (MVP)
+            assumed_stock = st.number_input(
+                "Enter assumed current stock per product (you can refine per-product logic later):",
+                min_value=0,
+                value=20,
+                step=1
+                )
+
+            # Add current stock and recommended order columns
+            df_results["Current Stock"] = assumed_stock
+
+            df_results["Recommended Order"] = np.maximum(
+                df_results["Predicted Demand Next 14 Days"] - df_results["Current Stock"],
+                0
+            )
+
+            # Risk status label
+            def risk_label(order):
+                if order > 0:
+                    return "⚠ Stockout Risk"
+                return "✔ Stable"
+
+            df_results["Risk Status"] = df_results["Recommended Order"].apply(risk_label)
+
+            st.dataframe(df_results, use_container_width=True)
+
+            # Optional: allow download of this as an Excel report
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+                df_results.to_excel(writer, index=False, sheet_name="Forecast & Reorder")
+
+            st.download_button(
+                label="📥 Download Forecast & Reorder Report (Excel)",
+                data=buffer.getvalue(),
+                file_name="smartinventory_forecast_reorder.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        else:
+            st.info("No forecast results were generated. Check that you have enough history per product.")
+
+
+        st.write("---")  # Optional separator
 
         product_list = sorted(df["product_name"].unique())
         selected_product = st.selectbox("Select product to forecast", product_list)
